@@ -1,10 +1,31 @@
 # BananaRouter 生图工具
 
-需要生成图片时使用 [generate.mjs](../scripts/generate.mjs)。Node.js 20+，无额外依赖，不需要安装到全局 skill 目录。
+需要生成图片时使用 [generate.mjs](../scripts/generate.mjs)。Node.js 20+，无额外依赖，可随整个 Skill 安装到全局 Agents Skills 目录。
 
 ## 配置
 
-密钥读取当前进程的 `BANANAROUTER_API_KEY`。不要将真实密钥写入 skill、提示词或提交到仓库。脚本不自动加载 `.env`；由宿主安全注入环境变量。
+推荐安装后在 Skill 根目录单独配置一次。以 `~/.agents/skills/xhs-note-creation/` 为例，将 [config.example.json](../config.example.json) 复制为同目录的 `config.local.json`，然后填写 BananaRouter 密钥：
+
+```json
+{
+  "apiKey": "在这里填写你的 BananaRouter API Key"
+}
+```
+
+配置文件的完整位置是 `~/.agents/skills/xhs-note-creation/config.local.json`。脚本根据自身所在位置寻找配置，不依赖 Agent 的工作目录；能访问这个全局 Skill 并运行 Node.js 的 Agent 都可使用同一份配置，无需各自设置环境变量。
+
+可在终端复制模板并限制文件访问权限，再用编辑器填写：
+
+```bash
+cp ~/.agents/skills/xhs-note-creation/config.example.json ~/.agents/skills/xhs-note-creation/config.local.json
+chmod 600 ~/.agents/skills/xhs-note-creation/config.local.json
+```
+
+只在首次配置时复制模板，已有配置时直接编辑，避免覆盖密钥。更新 Skill 时保留本地 `config.local.json`。
+
+非空环境变量 `BANANAROUTER_API_KEY` 优先于本地配置；未设置或为空时读取 `config.local.json` 的 `apiKey`。两者都没有可用密钥时，脚本在请求前报错并指出配置位置。脚本不自动加载 `.env`。
+
+真实密钥只放在本地配置或环境变量中，不写入 `SKILL.md`、示例文件或提示词。`config.local.json` 已被 Git 忽略，仓库发布打包脚本也会排除它；自行分享或打包 Skill 时同样排除该文件。Agent 直接运行脚本即可，不需要读取或输出密钥内容。
 
 - 默认服务地址：`https://api.bananarouter.com`。
 - 可选环境变量 `BANANAROUTER_BASE_URL` 可以指定服务地址，末尾可带 `/v1`。
@@ -18,7 +39,7 @@
 首次生成封面，从 Agent 的默认工作目录调用；以下路径需替换成真实路径：
 
 ```bash
-node /path/to/xhs-note-image/scripts/generate.mjs \
+node /path/to/xhs-note-creation/scripts/generate.mjs \
   --prompt-file /path/to/cover.prompt.json \
   --note '披肩秋日街拍' --name cover \
   --image /path/to/product.png \
@@ -28,7 +49,7 @@ node /path/to/xhs-note-image/scripts/generate.mjs \
 目录按机器本地日期命名，如 `2026-10-06-披肩秋日街拍/`。实际使用时可先建好笔记目录保存原始提示词，再用 `--dir` 指向它。后续配图和修改始终使用原笔记目录，不因日期变化建新目录：
 
 ```bash
-node /path/to/xhs-note-image/scripts/generate.mjs \
+node /path/to/xhs-note-creation/scripts/generate.mjs \
   --prompt-file /path/to/笔记目录/1.prompt.json \
   --dir /path/to/笔记目录 --name 1 \
   --image /path/to/product.png \
@@ -38,7 +59,7 @@ node /path/to/xhs-note-image/scripts/generate.mjs \
 修改时传入自然语言指令，目标原图放第一张：
 
 ```bash
-node /path/to/xhs-note-image/scripts/generate.mjs \
+node /path/to/xhs-note-creation/scripts/generate.mjs \
   --prompt-file /path/to/笔记目录/cover-v2.prompt.txt \
   --dir /path/to/笔记目录 --name cover-v2 \
   --image /path/to/笔记目录/cover.png \

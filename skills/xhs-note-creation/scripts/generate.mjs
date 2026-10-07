@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const MODEL = 'gpt-image-2.5-flare';
+const CONFIG_FILE = fileURLToPath(new URL('../config.local.json', import.meta.url));
 const HELP = `用 BananaRouter 生成一张图片（Node.js 20+，无需安装依赖）。
 
 node scripts/generate.mjs --prompt-file prompt.json --note 披肩街拍 --name cover \\
@@ -23,7 +24,8 @@ node scripts/generate.mjs --prompt-file prompt.json --note 披肩街拍 --name c
   --timeout SECONDS     请求超时，默认 600 秒；不自动重试
   --help                显示帮助
 
-环境变量：BANANAROUTER_API_KEY；可选 BANANAROUTER_BASE_URL
+密钥：环境变量 BANANAROUTER_API_KEY 优先，否则读取 Skill 根目录 config.local.json 的 apiKey
+可选环境变量：BANANAROUTER_BASE_URL
 默认服务地址：https://api.bananarouter.com（可带 /v1）
 模型固定为 ${MODEL}；未传参考图使用文生图接口，传图使用编辑接口。
 保存同名图片和 .md 记录；已有文件时拒绝调用，请选择新版本名称。`;
@@ -112,11 +114,30 @@ function record(args, prompt, refs, state, image, detail) {
   return `# ${args.name}\n\n## 最终提示词\n\n${fence}text\n${prompt}\n${fence}\n\n## 参考图\n\n${mapping}\n\n## 状态\n\n- 类型：${kind}\n- 交付：${state}\n${image ? `- 图片：${image}\n` : ''}- 模型：${MODEL}\n- 尺寸：${args.size}\n- 质量：${args.quality}\n${detail ? `- 说明：${detail}\n` : ''}`;
 }
 
+async function apiKey() {
+  const envKey = process.env.BANANAROUTER_API_KEY?.trim();
+  if (envKey) return envKey;
+  let source;
+  try { source = await readFile(CONFIG_FILE, 'utf8'); }
+  catch (error) {
+    if (error.code !== 'ENOENT') throw new Error(`无法读取密钥配置：${CONFIG_FILE}`);
+  }
+  if (source !== undefined) {
+    let config;
+    try { config = JSON.parse(source); }
+    catch { throw new Error(`密钥配置不是有效 JSON：${CONFIG_FILE}；请按 config.example.json 填写。`); }
+    if (!config || Array.isArray(config) || typeof config !== 'object' || typeof config.apiKey !== 'string') {
+      throw new Error(`密钥配置的 apiKey 必须是字符串：${CONFIG_FILE}`);
+    }
+    if (config.apiKey.trim()) return config.apiKey.trim();
+  }
+  throw new Error(`缺少 API Key：请填写 ${CONFIG_FILE} 的 apiKey，或设置 BANANAROUTER_API_KEY。`);
+}
+
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   if (args.help) { console.log(HELP); return; }
-  const key = process.env.BANANAROUTER_API_KEY?.trim();
-  if (!key) throw new Error('缺少 BANANAROUTER_API_KEY');
+  const key = await apiKey();
   const base = httpUrl(process.env.BANANAROUTER_BASE_URL || 'https://api.bananarouter.com');
   if (base.search || base.hash || !['', '/', '/v1', '/v1/'].includes(base.pathname)) throw new Error('服务地址路径只能为空或 /v1。');
   const endpoint = `${base.origin}/v1/images/${args.image.length ? 'edits' : 'generations'}`;

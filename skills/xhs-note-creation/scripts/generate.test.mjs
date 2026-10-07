@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { once } from 'node:events';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, writeFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, readdir, rm, mkdir, copyFile, realpath } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +12,11 @@ const script = fileURLToPath(new URL('./generate.mjs', import.meta.url));
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
 
 test('BananaRouter 脚本的 HTTP 调用与文件保存', async t => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'xhs-image-test-'));
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'xhs-image-test-')));
+  const installedScript = path.join(root, 'skills/xhs-note-creation/scripts/generate.mjs');
+  const configFile = path.join(root, 'skills/xhs-note-creation/config.local.json');
+  await mkdir(path.dirname(installedScript), { recursive: true });
+  await copyFile(script, installedScript);
   const requests = [];
   let reply = () => ({ data: [{ b64_json: png.toString('base64') }] });
   const server = http.createServer(async (req, res) => {
@@ -37,7 +41,7 @@ test('BananaRouter 脚本的 HTTP 调用与文件保存', async t => {
   await writeFile(product, png);
 
   async function run(dir, extra = [], env = {}, source = promptFile) {
-    const child = spawn(process.execPath, [script, '--prompt-file', source, '--dir', path.join(root, dir), '--name', 'cover', ...extra], {
+    const child = spawn(process.execPath, [installedScript, '--prompt-file', source, '--dir', path.join(root, dir), '--name', 'cover', ...extra], {
       cwd: root, env: { ...process.env, BANANAROUTER_API_KEY: 'test-secret', BANANAROUTER_BASE_URL: `${base}/v1`, ...env },
     });
     let stdout = '', stderr = '';
@@ -46,6 +50,46 @@ test('BananaRouter 脚本的 HTTP 调用与文件保存', async t => {
     const [code] = await once(child, 'close');
     return { code, stdout, stderr };
   }
+
+  await t.test('从安装目录读取密钥，不依赖工作目录；环境变量可覆盖', async () => {
+    await writeFile(configFile, JSON.stringify({ apiKey: '  local-test-secret  ' }));
+    try {
+      const result = await run('local-key', [], { BANANAROUTER_API_KEY: '' });
+      assert.equal(result.code, 0, result.stderr);
+      assert.equal(requests.at(-1).headers.authorization, 'Bearer local-test-secret');
+      const record = await readFile(path.join(root, 'local-key/cover.md'), 'utf8');
+      assert.ok(!record.includes('local-test-secret'));
+      assert.ok(!result.stdout.includes('local-test-secret'));
+      assert.equal((await run('env-key')).code, 0);
+      assert.equal(requests.at(-1).headers.authorization, 'Bearer test-secret');
+
+      reply = () => ({ status: 403, error: { message: '权限不足 local-test-secret' } });
+      const failed = await run('local-key-error', [], { BANANAROUTER_API_KEY: ' ' });
+      assert.equal(failed.code, 1);
+      assert.ok(!failed.stderr.includes('local-test-secret'));
+      assert.ok(!(await readFile(path.join(root, 'local-key-error/cover.md'), 'utf8')).includes('local-test-secret'));
+    } finally {
+      reply = () => ({ data: [{ b64_json: png.toString('base64') }] });
+      await rm(configFile);
+    }
+  });
+
+  await t.test('配置错误在请求前报错，不输出配置内容；有效环境变量无需读取配置', async () => {
+    try {
+      for (const source of ['{"apiKey":"private-secret"', '{"apiKey":123}', 'null', '[]', '{"apiKey":" "}']) {
+        await writeFile(configFile, source);
+        const count = requests.length;
+        const result = await run('bad-config', [], { BANANAROUTER_API_KEY: '' });
+        assert.equal(result.code, 1);
+        assert.ok(result.stderr.includes(configFile));
+        assert.ok(!result.stderr.includes('private-secret'));
+        assert.equal(requests.length, count);
+      }
+      await writeFile(configFile, 'invalid json');
+      assert.equal((await run('env-with-bad-config')).code, 0);
+      assert.equal(requests.at(-1).headers.authorization, 'Bearer test-secret');
+    } finally { await rm(configFile); }
+  });
 
   await t.test('多参考图按序进入编辑接口；原始提示词和职责被保存', async () => {
     const remote = 'https://example.com/background.jpg';
@@ -90,7 +134,7 @@ test('BananaRouter 脚本的 HTTP 调用与文件保存', async t => {
   await t.test('自然语言修改保留原图优先和版本名称', async () => {
     const edit = path.join(root, 'edit.txt');
     await writeFile(edit, '保留人物，调整右手与披肩接触。');
-    const child = spawn(process.execPath, [script, '--prompt-file', edit, '--dir', path.join(root, 'multi'), '--name', 'cover-v2', '--image', path.join(root, 'multi/cover.png'), '--image', product], {
+    const child = spawn(process.execPath, [installedScript, '--prompt-file', edit, '--dir', path.join(root, 'multi'), '--name', 'cover-v2', '--image', path.join(root, 'multi/cover.png'), '--image', product], {
       env: { ...process.env, BANANAROUTER_API_KEY: 'test-secret', BANANAROUTER_BASE_URL: base },
       stdio: 'ignore',
     });
@@ -159,7 +203,7 @@ test('BananaRouter 脚本的 HTTP 调用与文件保存', async t => {
     reply = () => ({ data: [{ b64_json: png.toString('base64') }] });
     const now = new Date();
     const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
-    const child = spawn(process.execPath, [script, '--prompt-file', promptFile, '--note', '披肩/街拍', '--name', 'cover'], {
+    const child = spawn(process.execPath, [installedScript, '--prompt-file', promptFile, '--note', '披肩/街拍', '--name', 'cover'], {
       cwd: root, env: { ...process.env, BANANAROUTER_API_KEY: 'test-secret', BANANAROUTER_BASE_URL: base }, stdio: 'ignore',
     });
     assert.equal((await once(child, 'close'))[0], 0);

@@ -31,6 +31,7 @@ import {
 } from "./lib/skills.mjs";
 
 const EXCLUDE = [
+  "config.local.json",
   ".DS_Store",
   "Thumbs.db",
   "node_modules",

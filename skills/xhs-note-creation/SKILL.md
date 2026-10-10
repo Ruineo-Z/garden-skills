@@ -1,11 +1,13 @@
 ---
 name: xhs-note-creation
-description: 创作售卖披肩等配饰的小红书笔记，支持封面、后续配图、图片修改、笔记方向讨论及标题、正文和话题标签创作与修改。根据商品图、已确认配图和可用对标逐步推导；配图使用 BananaRouter 的 gpt-image-2.5-flare，最终文案用独立代码块交付，便于复制。
+description: 创作售卖披肩等配饰的小红书笔记，支持选题方向、对标分析、封面、后续配图、图片修改及标题、正文和话题标签创作与修改，并可按用户提供的数据定位问题环节。根据商品图、已确认配图和可用对标逐步推导；配图使用 BananaRouter 的 gpt-image-2.5-flare，最终文案用独立代码块交付，便于复制。
 ---
 
 # 小红书笔记创作
 
 面向售卖披肩等女性配饰的本地 Agent。创作开始时先确定发布时间和目标人群，结合商品选择本篇要回应的需求，再设计穿搭与拍摄场景、制作配图，最后依据实际配图写标题、正文和话题标签。目标是吸引可能喜欢商品的读者，通过内容建立购买意愿，由笔记独立展示的商品区域承接购买。需要出图时使用随附的 BananaRouter 脚本。
+
+当前默认品类是披肩等女性配饰。换到其他品类时，品类相关的判断（商品能支持什么、封面要不要文字、哪些卖点看得见）按同一套推导重新走一遍；[选题生成](references/topic-discovery.md) 和 [对标分析](references/benchmark-analysis.md) 与品类无关，可以直接用。
 
 ## 默认创作顺序
 
@@ -18,7 +20,7 @@ description: 创作售卖披肩等配饰的小红书笔记，支持封面、后�
 - 账号人群资料可沿用用户此前提供且仍适用的信息，不要求每篇重新填写。发布时间和本篇重点按当前笔记判断，缺少会影响选择的关键依据才询问。
 - 已有图片、只需写文案时，按现有素材处理，不要求重做图片；配图未齐但用户要求先写时，说明哪些内容尚无图片支持。局部修改沿用已确认背景，不强制重走整篇流程。
 - 标题候选、正文和话题标签可以一起讨论，不要求每个环节分别确认。用户只改标题、正文、标签或某张图片时，仅处理该部分；关联内容确实不一致时再指出。
-- 不自动发布笔记、挂商品、查询经营数据或安装到全局目录。
+- 不自动发布笔记、挂商品、主动查询经营数据或安装到全局目录。用户主动给出的数据可按 [data-diagnosis.md](references/data-diagnosis.md) 做诊断。
 
 ## 先判断当前任务
 
@@ -29,11 +31,14 @@ description: 创作售卖披肩等配饰的小红书笔记，支持封面、后�
 - **图片修改**：用户针对已有图片提出修改、重做或调整时，读取 [image-revision.md](references/image-revision.md)。
 - **提示词与保存**：每次需要生成或修改提示词时读取 [prompt-and-saving.md](references/prompt-and-saving.md)。
 - **实际生图**：用户要求生成图片时读取 [image-tool.md](references/image-tool.md)，使用脚本传入完整提示词和参考图。
+- **选题生成**：用户不知道写什么、要一批候选方向，或想把模糊想法变成能写的选题时，读取 [topic-discovery.md](references/topic-discovery.md)。
 - **创作准备与笔记方向**：开始整篇笔记、制作新封面或选择新方向时，先读取 [note-direction.md](references/note-direction.md)，确定时间、人群和本篇需求。进入文案阶段时核对实际配图，不重新推翻已确认方向。
+- **对标查找与拆解**：用户给出对标，或想找参考但没指定时，读取 [benchmark-analysis.md](references/benchmark-analysis.md)，把画面层和文字层分开拆。
 - **标题创作与修改**：读取 [title-writing.md](references/title-writing.md)，先确定一句话重点，再按清单、推导和检查规则处理。
 - **正文创作与修改**：读取 [body-writing.md](references/body-writing.md)，写完按其中的去味检查过一遍。
 - **话题标签创作与修改**：读取 [body-writing.md 的话题标签规则](references/body-writing.md#话题标签)。
 - **文案交付与保存**：讨论文案或交付最终稿时读取 [copy-and-saving.md](references/copy-and-saving.md)。
+- **数据诊断**：用户给出笔记数据、或问“为什么这篇没流量”时，读取 [data-diagnosis.md](references/data-diagnosis.md)，只做环节定位，不直接改写内容。
 
 “再来一张”不能单独决定任务类型。结合上下文判断它是在重做封面、追加配图，还是修改当前图片；只有上下文不足且会影响参考图或人物一致性时才提问。
 
